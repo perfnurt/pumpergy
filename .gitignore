@@ -1,0 +1,20 @@
+# Data files
+data/*.csv
+pumpergy.db
+downloader_google.json
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
