@@ -53,15 +53,12 @@ if not files:
 else:
     for f in files:    
         file_id = f["id"]
-
-        print(f["name"] )
         request = service.files().get_media(fileId=file_id)
         with open(f"data/{f['name']}", "wb") as fh:
             downloader = MediaIoBaseDownload(fh, request)
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-                print(f"Download {int(status.progress() * 100)}%.")
 
         try:
             file = service.files().get(fileId=file_id, fields="parents").execute()
@@ -73,7 +70,7 @@ else:
                 removeParents=previous_parents
             ).execute()
 
-            print(f"Moved {f['name']} to archive folder on Google Drive.")
+            print(f"Processed {f['name']}.")
         except Exception as e:
             print(f"Failed to move {f['name']} to archive folder on Google Drive: {e}\n")
 
