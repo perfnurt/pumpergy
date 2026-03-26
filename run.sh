@@ -31,13 +31,13 @@ if ! python -c "import streamlit" 2>/dev/null; then
 fi
 
 # Data acquisition
-if [[ "$1" == "--gdrive" ]]; then
+if [[ "$1" == "--gdrive" || "$1" == "-g" ]]; then
     shift
     echo "Collecting CSV(s) from Google Drive..."
     python downloader_google.py
 fi
 
-if [[ "$1" == "--dl" ]]; then
+if [[ "$1" == "--dl" || "$1" == "-d" ]]; then
     shift
     echo "Collecting CSV(s) from ~/Downloads/..."
     shopt -s nullglob
