@@ -30,15 +30,38 @@ if ! python -c "import streamlit" 2>/dev/null; then
     pip install -q -r requirements.txt
 fi
 
+# Parse flags
+ARCHIVED_FLAG=""
+GDRIVE=false
+DLMODE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --archived|-a)
+            ARCHIVED_FLAG="--archived"
+            GDRIVE=true
+            shift
+            ;;
+        --gdrive|-g)
+            GDRIVE=true
+            shift
+            ;;
+        --dl|-d)
+            DLMODE=true
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # Data acquisition
-if [[ "$1" == "--gdrive" || "$1" == "-g" ]]; then
-    shift
+if $GDRIVE; then
     echo "Collecting CSV(s) from Google Drive..."
-    python downloader_google.py
+    python downloader_google.py $ARCHIVED_FLAG
 fi
 
-if [[ "$1" == "--dl" || "$1" == "-d" ]]; then
-    shift
+if $DLMODE; then
     echo "Collecting CSV(s) from ~/Downloads/..."
     shopt -s nullglob
     files=(~/Downloads/EnergyData_*.csv)
@@ -55,4 +78,4 @@ fi
 
 # Run the dashboard
 echo "Starting Pumpergy dashboard..."
-streamlit run app.py "$@"
+streamlit run app.py 

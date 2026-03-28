@@ -2,11 +2,23 @@
 # 1. download CSV files from a specified folder and save them to the ./data/ folder.
 # 2. move the downloaded files to an archive folder on Google Drive.
 #   (only file owner can delete files, so we move them instead of deleting)
+#
+# Usage:
+#   python downloader_google.py              Download from folderId, then move to archive.
+#   python downloader_google.py --archived   Download from archiveFolderId without moving files.
 
+import argparse
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2.service_account import Credentials
 import json
+
+parser = argparse.ArgumentParser(description="Download CSV files from Google Drive.")
+parser.add_argument(
+    "--archived", action="store_true",
+    help="Import from the archive folder instead, without moving any files."
+)
+args = parser.parse_args()
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -38,11 +50,13 @@ except Exception as e:
 #   "serviceAccount":  <the service account credentials json content> 
 # }
 
+source_folder_id = config["archiveFolderId"] if args.archived else config["folderId"]
+
 creds = Credentials.from_service_account_info(config["serviceAccount"], scopes=SCOPES)
 service = build("drive", "v3", credentials=creds)
 
 results = service.files().list(
-    q=f"'{config['folderId']}' in parents",
+    q=f"'{source_folder_id}' in parents",
     fields="files(id, name)"
 ).execute()
 
@@ -60,17 +74,20 @@ else:
             while not done:
                 status, done = downloader.next_chunk()
 
-        try:
-            file = service.files().get(fileId=file_id, fields="parents").execute()
-            previous_parents = ",".join(file.get("parents"))
+        if args.archived:
+            print(f"Processed {f['name']} (archived).")
+        else:
+            try:
+                file = service.files().get(fileId=file_id, fields="parents").execute()
+                previous_parents = ",".join(file.get("parents"))
 
-            service.files().update(
-                fileId=file_id,
-                addParents=config["archiveFolderId"],
-                removeParents=previous_parents
-            ).execute()
+                service.files().update(
+                    fileId=file_id,
+                    addParents=config["archiveFolderId"],
+                    removeParents=previous_parents
+                ).execute()
 
-            print(f"Processed {f['name']}.")
-        except Exception as e:
-            print(f"Failed to move {f['name']} to archive folder on Google Drive: {e}\n")
+                print(f"Processed {f['name']}.")
+            except Exception as e:
+                print(f"Failed to move {f['name']} to archive folder on Google Drive: {e}\n")
 
