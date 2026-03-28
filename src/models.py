@@ -90,8 +90,9 @@ ANNOTATION_ICONS = {
 def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
     """Get a database connection."""
     path = db_path or DB_PATH
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

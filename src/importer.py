@@ -112,46 +112,18 @@ def import_csv(csv_path: Path, db_path: Optional[Path] = None) -> dict:
             if csv_idx >= 2 and csv_idx < len(row):
                 record[db_col] = parse_value(row[csv_idx])
         
-        # Check if record exists and compare values
+        # Upsert: insert or update on conflict
+        columns = ', '.join(DB_COLUMNS)
+        placeholders = ', '.join(['?'] * len(DB_COLUMNS))
+        update_cols = DB_COLUMNS[2:]
+        set_clause = ', '.join(f"{col} = excluded.{col}" for col in update_cols)
+        values = [record[col] for col in DB_COLUMNS]
         cursor.execute(
-            f"SELECT {', '.join(DB_COLUMNS[2:])} FROM energy_readings WHERE category = ? AND timestamp = ?",
-            (category, timestamp)
+            f"INSERT INTO energy_readings ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(category, timestamp) DO UPDATE SET {set_clause}",
+            values
         )
-        existing = cursor.fetchone()
-        
-        if existing:
-            # Compare existing values with new values
-            # Normalize both to handle int/float differences (1 vs 1.0)
-            new_values = tuple(record[col] for col in DB_COLUMNS[2:])
-            existing_values = tuple(existing)
-            
-            def normalize(v):
-                if v is None:
-                    return None
-                return float(v)
-            
-            if tuple(normalize(v) for v in existing_values) == tuple(normalize(v) for v in new_values):
-                # No change, skip update
-                stats['skipped'] += 1
-                continue
-            
-            # Update existing record (values differ)
-            set_clause = ', '.join(f"{col} = ?" for col in DB_COLUMNS[2:])
-            values = [record[col] for col in DB_COLUMNS[2:]] + [category, timestamp]
-            cursor.execute(
-                f"UPDATE energy_readings SET {set_clause} WHERE category = ? AND timestamp = ?",
-                values
-            )
-            stats['updated'] += 1
-        else:
-            # Insert new record
-            placeholders = ', '.join(['?'] * len(DB_COLUMNS))
-            columns = ', '.join(DB_COLUMNS)
-            values = [record[col] for col in DB_COLUMNS]
-            cursor.execute(
-                f"INSERT INTO energy_readings ({columns}) VALUES ({placeholders})",
-                values
-            )
+        if cursor.rowcount:
             stats['inserted'] += 1
     
     conn.commit()
@@ -182,14 +154,21 @@ def import_all_csvs(data_dir: Path = None, db_path: Optional[Path] = None) -> di
     totals = {'inserted': 0, 'updated': 0, 'skipped': 0, 'files': []}
 
     for csv_path in csv_files:
+        if not csv_path.exists():
+            continue
         try:
             stats = import_csv(csv_path, db_path)
             totals['inserted'] += stats['inserted']
             totals['updated'] += stats['updated']
             totals['skipped'] += stats['skipped']
             totals['files'].append({'name': csv_path.name, 'status': 'ok', **stats})
-            csv_path.unlink()
+            try:
+                csv_path.unlink()
+            except FileNotFoundError:
+                pass
             print(f"Imported and deleted {csv_path.name}", flush=True)
+        except FileNotFoundError:
+            continue
         except Exception as e:
             print(f"Failed to import {csv_path.name}: {e}", flush=True)
             totals['files'].append({'name': csv_path.name, 'status': 'error', 'error': str(e)})
