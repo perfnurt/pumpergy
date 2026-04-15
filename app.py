@@ -32,14 +32,14 @@ st.title("🔥 Pumpergy - Heat Pump Energy Dashboard")
 def load_data(category: str = None, start_date: str = None, end_date: str = None) -> pd.DataFrame:
     """Load data from database with optional filters."""
     conn = get_connection()
-    
+
     query = "SELECT * FROM energy_readings WHERE 1=1"
     params = []
-    
+
     if category:
         query += " AND category = ?"
         params.append(category)
-    
+
     if start_date:
         if category == 'month':
             # For monthly data, compare year-month only (timestamps are like '2026-02')
@@ -48,7 +48,7 @@ def load_data(category: str = None, start_date: str = None, end_date: str = None
         else:
             query += " AND timestamp >= ?"
             params.append(start_date)
-    
+
     if end_date:
         if category == 'month':
             # For monthly data, compare year-month only
@@ -57,15 +57,15 @@ def load_data(category: str = None, start_date: str = None, end_date: str = None
         else:
             query += " AND timestamp <= ?"
             params.append(end_date + 'Z')  # Include full day
-    
+
     query += " ORDER BY timestamp"
-    
+
     df = pd.read_sql_query(query, conn, params=params)
     conn.close()
-    
+
     if not df.empty:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
+
     return df
 
 
@@ -97,25 +97,25 @@ if 'import_done' not in st.session_state:
 # Sidebar - Filters
 with st.sidebar:
     st.header("🔍 Filters")
-    
+
     category = st.selectbox(
         "Time Resolution",
         options=["hour", "day", "month"],
         index=0,  # Default to 'hour'
         format_func=lambda x: {"hour": "Hourly", "day": "Daily", "month": "Monthly"}[x]
     )
-    
+
     # Date range
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input("Start Date", value=datetime.now() - timedelta(days=60))
     with col2:
         end_date = st.date_input("End Date", value=datetime.now())
-    
+
     st.divider()
     st.header("🦠 Legionella Schedule")
     st.caption("Hot water is heated extra to prevent legionella bacteria growth")
-    
+
     WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     legionella_day = st.selectbox(
         "Scheduled Day",
@@ -129,32 +129,32 @@ with st.sidebar:
         index=2,  # 2 AM
         format_func=lambda x: f"{x:02d}:00"
     )
-    
+
     st.divider()
     st.header("📝 Annotations")
-    
+
     # Add new annotation
     with st.expander("➕ Add Annotation", expanded=False):
         ann_date = st.date_input("Date", value=datetime.now(), key="ann_date")
         ann_time = st.time_input("Time", value=datetime.now().time(), key="ann_time")
-        
+
         icon_options = list(ANNOTATION_ICONS.keys())
         ann_icon = st.selectbox(
             "Icon",
             options=icon_options,
             format_func=lambda x: f"{ANNOTATION_ICONS[x][0]} {ANNOTATION_ICONS[x][1]}"
         )
-        
+
         ann_duration = st.number_input("Duration (hours)", min_value=0.0, max_value=168.0, value=0.0, step=1.0,
                                        help="0 = point in time, otherwise duration in hours")
         ann_text = st.text_area("Note (optional)", placeholder="What happened?")
-        
+
         if st.button("Add Annotation", type="primary"):
             timestamp = datetime.combine(ann_date, ann_time).isoformat()
             add_annotation(timestamp, ann_icon, ann_text.strip(), ann_duration)
             st.success("✅ Annotation added!")
             st.rerun()
-    
+
     # List existing annotations
     all_annotations = get_annotations(start_date.isoformat(), end_date.isoformat())
     if all_annotations:
@@ -163,7 +163,7 @@ with st.sidebar:
             icon_emoji = ANNOTATION_ICONS.get(ann['icon'], ('📝', 'Note'))[0]
             ann_ts = datetime.fromisoformat(ann['timestamp'])
             duration_str = f" ({ann['duration_hours']}h)" if ann['duration_hours'] > 0 else ""
-            
+
             col1, col2, col3 = st.columns([4, 1, 1])
             with col1:
                 st.markdown(f"{icon_emoji} **{ann_ts.strftime('%Y-%m-%d %H:%M')}**{duration_str}: {ann['text']}")
@@ -174,13 +174,13 @@ with st.sidebar:
                 if st.button("🗑️", key=f"del_{ann['id']}", help="Delete annotation"):
                     delete_annotation(ann['id'])
                     st.rerun()
-            
+
             # Edit form (shown when editing)
             if st.session_state.get(f"editing_{ann['id']}", False):
                 with st.container():
                     edit_date = st.date_input("Date", value=ann_ts.date(), key=f"edit_date_{ann['id']}")
                     edit_time = st.time_input("Time", value=ann_ts.time(), key=f"edit_time_{ann['id']}")
-                    
+
                     icon_options = list(ANNOTATION_ICONS.keys())
                     current_icon_idx = icon_options.index(ann['icon']) if ann['icon'] in icon_options else 0
                     edit_icon = st.selectbox(
@@ -190,12 +190,12 @@ with st.sidebar:
                         format_func=lambda x: f"{ANNOTATION_ICONS[x][0]} {ANNOTATION_ICONS[x][1]}",
                         key=f"edit_icon_{ann['id']}"
                     )
-                    
-                    edit_duration = st.number_input("Duration (hours)", min_value=0.0, max_value=168.0, 
+
+                    edit_duration = st.number_input("Duration (hours)", min_value=0.0, max_value=168.0,
                                                     value=float(ann['duration_hours']), step=1.0,
                                                     key=f"edit_duration_{ann['id']}")
                     edit_text = st.text_area("Note (optional)", value=ann['text'], key=f"edit_text_{ann['id']}")
-                    
+
                     col_save, col_cancel = st.columns(2)
                     with col_save:
                         if st.button("💾 Save", key=f"save_{ann['id']}", type="primary"):
@@ -319,7 +319,7 @@ if category in ['hour', 'day']:
             # Match the day of week
             if ts.weekday() == legionella_day:
                 legionella_times.append(ts.to_pydatetime())
-    
+
     # Add vertical lines for each legionella schedule time
     for ts in legionella_times:
         fig_consumption.add_shape(
@@ -339,7 +339,7 @@ if category in ['hour', 'day']:
             font=dict(size=14),
             yshift=10
         )
-    
+
     if legionella_times:
         # Add invisible trace for legend entry
         fig_consumption.add_trace(go.Scatter(
@@ -355,7 +355,7 @@ for ann in all_annotations:
     ann_ts = datetime.fromisoformat(ann['timestamp'])
     icon_emoji = ANNOTATION_ICONS.get(ann['icon'], ('📝', 'Note'))[0]
     icon_desc = ANNOTATION_ICONS.get(ann['icon'], ('📝', 'Note'))[1]
-    
+
     # Add vertical line at annotation time
     fig_consumption.add_shape(
         type="line",
@@ -364,7 +364,7 @@ for ann in all_annotations:
         yref="paper",
         line=dict(color="#E67E22", width=2, dash="dot")
     )
-    
+
     # If there's duration, add a shaded region
     if ann['duration_hours'] > 0:
         end_ts = ann_ts + timedelta(hours=ann['duration_hours'])
@@ -374,7 +374,7 @@ for ann in all_annotations:
             opacity=0.1,
             line_width=0
         )
-    
+
     # Add annotation marker with hover text
     fig_consumption.add_annotation(
         x=ann_ts,
@@ -399,13 +399,21 @@ if all_annotations:
 
 # Shade data gaps
 for gap_start, gap_end in data_gaps:
+    # Convert to Python datetime to avoid pandas Timestamp arithmetic issues in Plotly
+    x0 = gap_start.to_pydatetime() if hasattr(gap_start, 'to_pydatetime') else gap_start
+    x1 = gap_end.to_pydatetime() if hasattr(gap_end, 'to_pydatetime') else gap_end
     fig_consumption.add_vrect(
-        x0=gap_start, x1=gap_end,
+        x0=x0, x1=x1,
         fillcolor="gray", opacity=0.15, line_width=0,
-        annotation_text="no data" if (gap_end - gap_start) > timedelta(hours=6) else "",
-        annotation_position="top",
-        annotation_font_color="gray",
     )
+    # Add annotation separately to avoid Plotly's sum() on datetime objects
+    if (gap_end - gap_start) > timedelta(hours=6):
+        mid_x = x0 + (x1 - x0) / 2
+        fig_consumption.add_annotation(
+            x=mid_x, y=1, yref="paper",
+            text="no data", showarrow=False,
+            font=dict(color="gray"),
+        )
 
 if data_gaps:
     fig_consumption.add_trace(go.Scatter(
@@ -420,7 +428,7 @@ fig_consumption.update_layout(
     yaxis_title='Energy (kWh)',
     legend=dict(orientation='h', yanchor='bottom', y=1.02),
     height=450,
-    margin=dict(t=0) 
+    margin=dict(t=0)
 )
 
 fig_consumption.update_yaxes(title_text='Energy (kWh)', secondary_y=False)
@@ -433,10 +441,10 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("🌡️ Temperature vs Consumption")
-    
+
     # Filter out rows with no temperature data
     temp_df = df[df['outdoor_temp'].notna()].copy()
-    
+
     if not temp_df.empty:
         fig_temp = px.scatter(
             temp_df,
@@ -458,7 +466,7 @@ with col_left:
 
 with col_right:
     st.subheader("🔥 Energy Breakdown by Type")
-    
+
     breakdown_data = {
         'Type': ['Central Heating (HP)', 'Hot Water (HP)', 'Central Heating (Aux)', 'Hot Water (Aux)'],
         'Energy': [
@@ -470,7 +478,7 @@ with col_right:
     }
     breakdown_df = pd.DataFrame(breakdown_data)
     breakdown_df = breakdown_df[breakdown_df['Energy'] > 0]
-    
+
     if not breakdown_df.empty:
         fig_breakdown = px.pie(
             breakdown_df,
@@ -489,7 +497,7 @@ st.subheader("⚠️ Auxiliary Heater Analysis")
 
 # Display expected schedule info
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-st.info(f"""**Expected Schedule:** The auxiliary heater is scheduled to run on **{WEEKDAYS[legionella_day]}s around {legionella_hour:02d}:00** 
+st.info(f"""**Expected Schedule:** The auxiliary heater is scheduled to run on **{WEEKDAYS[legionella_day]}s around {legionella_hour:02d}:00**
 for legionella prevention (extra hot water heating to 60°C+). Usage outside this window may indicate:
 - Very cold outdoor temperatures requiring backup heating
 - Heat pump malfunction or insufficient capacity
@@ -504,27 +512,27 @@ else:
     # Check for unexpected usage (outside scheduled window)
     aux_active['hour'] = aux_active['timestamp'].dt.hour
     aux_active['weekday'] = aux_active['timestamp'].dt.weekday  # 0=Monday, 1=Tuesday, etc.
-    
+
     # Expected logic depends on time resolution
     hour_min = max(0, legionella_hour - 1)
     hour_max = min(23, legionella_hour + 2)
-    
+
     if category == 'hour':
         # For hourly: must match day AND be within hour window
         aux_active['expected'] = (aux_active['weekday'] == legionella_day) & (aux_active['hour'].between(hour_min, hour_max))
     else:
         # For daily/monthly: just match the day of week (can't check hour precision)
         aux_active['expected'] = (aux_active['weekday'] == legionella_day)
-    
+
     # Group consecutive timestamps into events
     aux_active = aux_active.sort_values('timestamp').reset_index(drop=True)
-    
+
     events = []
     current_event = None
-    
+
     for idx, row in aux_active.iterrows():
         ts = row['timestamp'].to_pydatetime()
-        
+
         # Check if this should be part of current event
         should_group = False
         if current_event is not None:
@@ -537,7 +545,7 @@ else:
             else:
                 # For monthly data, consecutive means next month
                 should_group = (ts - current_event['end']) <= timedelta(days=45)
-        
+
         if current_event is None:
             # Start new event
             current_event = {
@@ -571,11 +579,11 @@ else:
                 'outdoor_temps': [row['outdoor_temp']] if pd.notna(row['outdoor_temp']) else [],
                 'expected': row['expected'],
             }
-    
+
     # Don't forget the last event
     if current_event:
         events.append(current_event)
-    
+
     # Load which events were marked as handled and attach status to each event.
     handled_map = {
         row['event_start']: {'id': row['id'], 'note': row['note']}
