@@ -2,16 +2,13 @@
 
 ![Pumpergy Dashboard](screenshot.png)
 
-A dashboard to visualize and explore heat pump energy consumption over time, particularly highlighting when auxiliary heating has been in effect.  
-Uses CSV data exported from the[ IVT Anywhere II](https://www.google.com/search?q=ivt+anywhere+ii) app.
+A PHP/MariaDB web dashboard to visualize and explore heat pump energy consumption over time, with extra focus on auxiliary heating events.
 
-[Python](https://www.python.org/) application using [Streamlit](https://streamlit.io/) for visualization
-and [SQLite](https://sqlite.org) for storage.
+Data is imported from CSV files exported by [IVT Anywhere II](https://www.google.com/search?q=ivt+anywhere+ii).
 
 ## Features
 - **Persistent storage** - New imports merge with existing data without loss. Overlapping imports are handled gracefully.
-- **Google Drive integration** - Optionally download CSV exports directly from Google Drive instead of local file system.
-- **Time-based filtering** - View hourly, daily, or monthly aggregations with custom date ranges
+- **Google Drive integration** - Import CSV exports directly from Google Drive into the DB.
 - **Energy visualizations**:
   - Consumption over time (Heat Pump vs Auxiliary Heater)
   - Temperature vs consumption correlation
@@ -19,59 +16,43 @@ and [SQLite](https://sqlite.org) for storage.
 - **Auxiliary heater monitoring** - Flags unexpected usage outside scheduled times (like the Legionella prevention typically at 2AM on Tuesdays).
 - **Custom annotations** - Add notes to specific times with icons (fuse issue, extra warm water requested, maintenance, etc.)
 
-## Usage
-### 1. Data retreival
+
+### Data retrieval
 Export data from IVT Anywhere II  
 `Energy Monitoring -> ⓘ down to the right -> Download data`  
-and share (typically to a cloud file storage or a local Downloads folder).
+and share to a Google Drive folder. 
 
 The app only provides last 3 days worth of hourly resolution, so to acheive that
 one needs to do this at least every 3rd day.
 
 💡 I'd love to know if there are easier ways to retrieve data from the [K 40 RF](https://docs.bosch-homecomfort.com/download/pdf/file/6721874402.pdf) unit,  see [discussion](https://github.com/perfnurt/pumpergy/discussions/1).
 
-### 2. Run the dashboard
-```bash
-./run.sh            # start the dashboard without collecting any new files
-./run.sh --dl       # collect CSV files from the ~/Downloads folder
-./run.sh --gdrive   # collect CSV files from Google Drive
-```
-- First run:   
-  -  Sets up a virtual Python environment
-  -  Installs dependencies
-- Imports the CSV files (if any)  
-  CSV files in `data/` are consumed and deleted after successful import.  
-  Multiple imports with overlapping or missing data are handled gracefully.
-- Starts the Streamlit server and opens the browser connected to it.
+On initial page load, Pumpery imports the csv files to its DB (with tome threshold as to not do it too often). 
+
 
 ## Project Structure
 ```
 pumpergy/
-├── app.py                  # Streamlit dashboard
-├── downloader_google.py    # Google Drive CSV downloader
-├── downloader_google.json  # Google Drive config & credentials (gitignored)
-├── run.sh                  # Entry point script
-├── requirements.txt
-├── data/                   # CSV drop folder (content deleted when consumed)
-├── pumpergy.db             # SQLite database (auto-created, gitignored)
-└── src/
-    ├── models.py           # Database schema
-    └── importer.py         # CSV parser
+├── deploy.sh
+├── .deploy-config-<target>.sh # Not versioned. Settings for deplopyng the app to <target>, see/run deplpy.sh for details/creation.
+├── creds.php.example       # Template file to copy to webroot(apps/creds.php)
+├── db/
+│   └── dbschema.sql        # The DB schema
+└── webroot/
+    ├── app/                # PHP app core (bootstrap, db, services, repos)
+        ├── creds.php       # Not versioned. Holds credentials to DB and Google Drive
+    ├── index.php
+    ├── sync.php
+    ├── readings.php
+    ├── annotations.php
+    └── settings.php
 ```
+
 ## Google Drive Integration
 Prerequisites:
 - Google Cloud [service account](https://docs.cloud.google.com/iam/docs/service-account-overview) with [Drive API](https://developers.google.com/workspace/drive/api/guides/about-sdk) enabled.
-- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) copied into  `downloader_google.json`.
+- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) added in `webroot/app/creds.php`.
 - Two folders in Google Drive that the service account has write access to.  
   The actual names are not important but something like:
   - `Pumpdata` for the CSV exports from IVT Anywhere II 
   - `PumpdataArchive` CSV moved here after being processed.
-
-The `downloader_google.json` is to hold the necessary configuration, not versioned for obvious reasons, structured like:
-```jsonc
-{
-  "folderId": "...", // folder id where CSV exports are located
-  "archiveFolderId": "...", // folder id where processed CSVs are moved to
-  "serviceAccount": { ... } // the service account JSON credentials
-}
-```
