@@ -63,6 +63,33 @@ function normalizeTimestampInput(value) {
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
+function formatLocalDateTime(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+}
+
+function toDisplayBucketTs(date, resolution, hourOverride = null) {
+  const dt = new Date(date.getTime());
+  if (resolution === 'hour') {
+    dt.setMinutes(0, 0, 0);
+    if (Number.isFinite(hourOverride)) {
+      dt.setHours(Number(hourOverride), 0, 0, 0);
+    }
+  } else if (resolution === 'month') {
+    dt.setDate(15);
+    dt.setHours(12, 0, 0, 0);
+  } else {
+    dt.setHours(12, 0, 0, 0);
+  }
+
+  return formatLocalDateTime(dt);
+}
+
 function stateFromForm() {
   const start = byId('start');
   const end = byId('end');
@@ -312,9 +339,7 @@ function renderConsumptionChart(series) {
     while (cursor <= last) {
       const weekdayMonZero = (cursor.getDay() + 6) % 7;
       if (weekdayMonZero === legionellaDay) {
-        const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
-        const hourKey = `${String(legionellaHour).padStart(2, '0')}:00:00`;
-        const canonicalKey = resolution === 'hour' ? `${dateKey} ${hourKey}` : `${dateKey} 00:00:00`;
+        const canonicalKey = toDisplayBucketTs(cursor, resolution, legionellaHour);
         if (!seenLegionellaKeys.has(canonicalKey)) {
           seenLegionellaKeys.add(canonicalKey);
           legionellaTimes.push(canonicalKey);
@@ -433,14 +458,15 @@ function renderConsumptionChart(series) {
 
     const symbol = annotationIconMap[ann.icon || 'note'] || '📝';
     const label = `${symbol} ${ann.note || ''}`.trim();
-    const startIso = new Date(startMs).toISOString();
-    const endIso = new Date(endMs).toISOString();
+    const startBucketTs = toDisplayBucketTs(startDate, resolution);
+    const endBucketTs = toDisplayBucketTs(new Date(endMs), resolution);
+    const isBucketedResolution = resolution !== 'hour';
 
-    if (durationHours > 0) {
+    if (durationHours > 0 && !isBucketedResolution) {
       shapes.push({
         type: 'rect',
-        x0: startIso,
-        x1: endIso,
+        x0: startBucketTs,
+        x1: endBucketTs,
         y0: 0,
         y1: 1,
         yref: 'paper',
@@ -448,7 +474,7 @@ function renderConsumptionChart(series) {
         line: { color: '#5C7CDC', width: 1 },
       });
       annotations.push({
-        x: new Date((startMs + endMs) / 2).toISOString(),
+        x: formatLocalDateTime(new Date((startMs + endMs) / 2)),
         y: 1,
         yref: 'paper',
         text: symbol,
@@ -462,8 +488,8 @@ function renderConsumptionChart(series) {
 
     shapes.push({
       type: 'line',
-      x0: startIso,
-      x1: startIso,
+      x0: startBucketTs,
+      x1: startBucketTs,
       y0: 0,
       y1: 1,
       yref: 'paper',
@@ -471,7 +497,7 @@ function renderConsumptionChart(series) {
     });
 
     annotations.push({
-      x: startIso,
+      x: startBucketTs,
       y: 1,
       yref: 'paper',
       text: symbol,
@@ -496,6 +522,9 @@ function renderConsumptionChart(series) {
     });
   }
 
+  const dayTickMs = 24 * 60 * 60 * 1000;
+  const tick0 = x.length > 0 ? x[0] : undefined;
+
   const layout = {
     width,
     autosize: true,
@@ -511,6 +540,7 @@ function renderConsumptionChart(series) {
       showgrid: false,
       zeroline: false,
       tickformat: '%Y-%m-%d',
+      ...(tick0 ? { tick0, dtick: dayTickMs } : {}),
     },
     yaxis: {
       title: 'Energy (kWh)',
