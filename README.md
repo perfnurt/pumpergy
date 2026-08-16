@@ -23,7 +23,7 @@ Export data from IVT Anywhere II
 and share to a Google Drive folder. 
 
 The app only provides last 3 days worth of hourly resolution, so to acheive that
-one needs to do this at least every 3rd day.
+one needs to do this at least every 3rd day. Pumpergy will gracefully handle files having different resolutions (i.e. Downloading last 3 months for getting daily resolution works) to cover for when/if one misses the *every 3rd day ceremony*.
 
 💡 I'd love to know if there are easier ways to retrieve data from the [K 40 RF](https://docs.bosch-homecomfort.com/download/pdf/file/6721874402.pdf) unit,  see [discussion](https://github.com/perfnurt/pumpergy/discussions/1).
 
@@ -51,7 +51,7 @@ pumpergy/
 ## Google Drive Integration
 Prerequisites:
 - Google Cloud [service account](https://docs.cloud.google.com/iam/docs/service-account-overview) with [Drive API](https://developers.google.com/workspace/drive/api/guides/about-sdk) enabled.
-- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) added in `webroot/app/creds.php`.
+- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) pecified in `app/creds.php`.
 - Two folders in Google Drive that the service account has write access to.  
   The actual names are not important but something like:
   - `Pumpdata` for the CSV exports from IVT Anywhere II 
