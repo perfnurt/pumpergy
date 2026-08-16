@@ -134,6 +134,45 @@ function normalizeSeries(series) {
   return Array.from(byTs.values()).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 }
 
+function collapseSeriesForDisplay(series, resolution) {
+  if (!Array.isArray(series) || series.length === 0) {
+    return [];
+  }
+
+  if (resolution !== 'day' && resolution !== 'month') {
+    return series;
+  }
+
+  const buckets = new Map();
+  for (const row of series) {
+    const rawTs = String(row?.ts || '');
+    if (!rawTs) {
+      continue;
+    }
+
+    const key = resolution === 'day' ? rawTs.slice(0, 10) : rawTs.slice(0, 7);
+    const canonicalTs = resolution === 'day' ? `${key} 12:00:00` : `${key}-15 12:00:00`;
+
+    if (!buckets.has(key)) {
+      buckets.set(key, { ...row, ts: canonicalTs });
+      continue;
+    }
+
+    const target = buckets.get(key);
+    target.ts = canonicalTs;
+
+    // Keep the most recent non-null values inside each day/month bucket.
+    for (const [field, value] of Object.entries(row)) {
+      if (field === 'ts' || value === null || value === undefined) {
+        continue;
+      }
+      target[field] = value;
+    }
+  }
+
+  return Array.from(buckets.values()).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+}
+
 async function loadReadings(state) {
   const res = await fetch(`readings.php?${toQuery(state)}`);
   if (!res.ok) {
@@ -285,9 +324,7 @@ function renderConsumptionChart(series) {
     }
   }
 
-  const barWidthMs = resolution === 'hour'
-    ? (60 * 60 * 1000 * 0.8)
-    : (24 * 60 * 60 * 1000 * 0.8);
+  const barWidthMs = resolution === 'hour' ? (60 * 60 * 1000 * 0.8) : null;
 
   const traces = [
     {
@@ -296,7 +333,7 @@ function renderConsumptionChart(series) {
       y: hp,
       name: 'Heat Pump',
       marker: { color: '#669966' },
-      width: barWidthMs,
+      ...(barWidthMs !== null ? { width: barWidthMs } : {}),
       yaxis: 'y',
     },
     {
@@ -305,7 +342,7 @@ function renderConsumptionChart(series) {
       y: aux,
       name: 'Auxiliary Heater',
       marker: { color: '#ff6666' },
-      width: barWidthMs,
+      ...(barWidthMs !== null ? { width: barWidthMs } : {}),
       yaxis: 'y',
     },
     {
@@ -652,7 +689,8 @@ async function refreshDashboard() {
     loadAnnotations(state),
   ]);
 
-  const series = normalizeSeries(Array.isArray(readings.series) ? readings.series : []);
+  const normalizedSeries = normalizeSeries(Array.isArray(readings.series) ? readings.series : []);
+  const series = collapseSeriesForDisplay(normalizedSeries, state.resolution);
 
   // Keep chart overlays in sync with the latest fetched annotations.
   annotationsCache = Array.isArray(annotationData.annotations) ? annotationData.annotations : [];
