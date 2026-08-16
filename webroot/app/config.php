@@ -7,5 +7,5 @@ declare(strict_types=1);
 return [
     'app_name' => 'Pumpergy',
     'timezone' => 'Europe/Stockholm',
-    'sync_interval_seconds' => 900,
+    'sync_interval_seconds' => 24 * 60 * 60, // 24 hours in seconds
 ];

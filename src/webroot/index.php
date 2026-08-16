@@ -1,7 +1,5 @@
 <?php
 
-// Renders the main Pumpergy dashboard page.
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap_loader.php';
@@ -160,10 +158,8 @@ header('Content-Type: text/html; charset=utf-8');
       <pre id="sync-status">waiting...</pre>
     </section>
 
-    <details class="panel collapsible-panel">
-      <summary>
-        <h2>Data sample</h2>
-      </summary>
+    <section class="panel">
+      <h2>Data samples</h2>
       <div class="table-wrap">
         <table>
           <thead>
@@ -178,7 +174,7 @@ header('Content-Type: text/html; charset=utf-8');
           <tbody id="sample-body"></tbody>
         </table>
       </div>
-    </details>
+    </section>
 
     <section class="panel settings-panel">
       <div class="settings-panel-head">

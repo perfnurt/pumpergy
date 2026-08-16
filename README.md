@@ -27,7 +27,7 @@ one needs to do this at least every 3rd day. Pumpergy will gracefully handle fil
 
 💡 I'd love to know if there are easier ways to retrieve data from the [K 40 RF](https://docs.bosch-homecomfort.com/download/pdf/file/6721874402.pdf) unit,  see [discussion](https://github.com/perfnurt/pumpergy/discussions/1).
 
-On initial page load, Pumpery imports the csv files to its DB (with tome threshold as to not do it too often). 
+Pumpergy imports the csv files to its DB (with some threshold as to not do it too often). 
 
 
 ## Project Structure

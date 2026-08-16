@@ -556,7 +556,7 @@ function renderSampleTable(series) {
     return;
   }
 
-  const rows = series.slice(0, 24);
+  const rows = series.slice(-24).reverse();
   target.innerHTML = rows
     .map((row) => {
       return `<tr>
