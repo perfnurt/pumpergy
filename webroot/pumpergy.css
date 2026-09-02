@@ -44,7 +44,7 @@ body {
 .layout {
   position: relative;
   z-index: 1;
-  width: min(1260px, calc(100% - 1.25rem));
+  width: calc(100% - 1.5rem);
   margin: 1rem auto 2rem;
   display: grid;
   gap: 1rem;
