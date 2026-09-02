@@ -43,6 +43,9 @@ final class ImportService
             foreach ($files as $file) {
                 $fileId = (string)($file['id'] ?? '');
                 $fileName = (string)($file['name'] ?? '');
+                $modifiedAt = isset($file['modifiedTime'])
+                    ? date('Y-m-d H:i:s', strtotime((string)$file['modifiedTime']))
+                    : null;
                 if ($fileId === '' || $fileName === '') {
                     continue;
                 }
@@ -51,12 +54,15 @@ final class ImportService
                     continue;
                 }
 
-                if ($this->imports->hasImportedFile('google_drive', $fileId)) {
+                if (!$this->imports->shouldImportFile('google_drive', $fileId, $modifiedAt)) {
                     continue;
                 }
 
                 $csvContent = $this->drive->downloadFile($fileId);
                 $rows = $this->parser->parse($csvContent, 'google_drive', $fileId);
+                if ($rows === []) {
+                    throw new RuntimeException(sprintf('CSV file %s contained no readable measurements', $fileName));
+                }
 
                 $this->pdo->beginTransaction();
                 $written = $this->imports->upsertReadings($rows);
@@ -64,7 +70,7 @@ final class ImportService
                     'google_drive',
                     $fileId,
                     $fileName,
-                    isset($file['modifiedTime']) ? date('Y-m-d H:i:s', strtotime((string)$file['modifiedTime'])) : null
+                    $modifiedAt
                 );
                 $this->pdo->commit();
 

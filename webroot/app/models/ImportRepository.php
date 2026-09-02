@@ -10,13 +10,46 @@ final class ImportRepository
     {
     }
 
-    public function hasImportedFile(string $source, string $externalId): bool
+    public function shouldImportFile(string $source, string $externalId, ?string $modifiedAt): bool
     {
-        $stmt = $this->pdo->prepare('SELECT 1 FROM imported_files WHERE source = :source AND external_id = :external_id LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT file_modified_at FROM imported_files WHERE source = :source AND external_id = :external_id LIMIT 1'
+        );
         $stmt->execute([
             ':source' => $source,
             ':external_id' => $externalId,
         ]);
+
+        $storedModifiedAt = $stmt->fetchColumn();
+        if ($storedModifiedAt === false) {
+            return true;
+        }
+
+        if (!$this->batchHasReadings($externalId)) {
+            return true;
+        }
+
+        if ($modifiedAt === null) {
+            return false;
+        }
+
+        if ($storedModifiedAt === null || $storedModifiedAt === '') {
+            return true;
+        }
+
+        $currentTimestamp = strtotime($modifiedAt);
+        $storedTimestamp = strtotime((string)$storedModifiedAt);
+        if ($currentTimestamp === false || $storedTimestamp === false) {
+            return $modifiedAt !== (string)$storedModifiedAt;
+        }
+
+        return $currentTimestamp > $storedTimestamp;
+    }
+
+    private function batchHasReadings(string $importBatchId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM energy_readings WHERE import_batch_id = :import_batch_id LIMIT 1');
+        $stmt->execute([':import_batch_id' => $importBatchId]);
 
         return (bool)$stmt->fetchColumn();
     }

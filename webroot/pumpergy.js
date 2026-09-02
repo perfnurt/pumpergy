@@ -691,7 +691,7 @@ function renderAnnotationList() {
 async function triggerSync(force = false) {
   const out = byId('sync-status');
   if (!out) {
-    return;
+    return null;
   }
 
   out.textContent = 'sync in progress...';
@@ -700,8 +700,10 @@ async function triggerSync(force = false) {
     const res = await fetch(url);
     const data = await res.json();
     out.textContent = formatSyncStatus(data);
+    return data;
   } catch (err) {
     out.textContent = `sync error: ${String(err)}`;
+    return null;
   }
 }
 
@@ -748,6 +750,7 @@ function wireEvents() {
   byId('btn-force-import').addEventListener('click', async () => {
     try {
       await triggerSync(true);
+      await refreshDashboard();
     } catch (err) {
       setStatus(`Failed to force import: ${String(err)}`);
     }
@@ -828,8 +831,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   resetAnnotationForm();
 
   try {
-    await refreshDashboard();
     await triggerSync(forceSync);
+    await refreshDashboard();
   } catch (err) {
     setStatus(`Initial load failed: ${String(err)}`);
   }

@@ -6,26 +6,36 @@ declare(strict_types=1);
 
 final class CsvParser
 {
-    private const CSV_COLUMN_MAP = [
-        ['ProducedEnergy', 'Total', 'heatPump(kWh)', 'prod_total_hp'],
-        ['ProducedEnergy', 'CentralHeating', 'heatPump(kWh)', 'prod_ch_hp'],
-        ['ProducedEnergy', 'Cooling', 'heatPump(kWh)', 'prod_cooling_hp'],
-        ['ProducedEnergy', 'HotWater', 'heatPump(kWh)', 'prod_hw_hp'],
-        ['ProducedEnergy', 'Total', 'environment(kWh)', 'prod_total_env'],
-        ['ProducedEnergy', 'CentralHeating', 'environment(kWh)', 'prod_ch_env'],
-        ['ProducedEnergy', 'Cooling', 'environment(kWh)', 'prod_cooling_env'],
-        ['ProducedEnergy', 'HotWater', 'environment(kWh)', 'prod_hw_env'],
-        ['ConsumedEnergy', 'Total', 'heatPump(kWh)', 'cons_total_hp'],
-        ['ConsumedEnergy', 'CentralHeating', 'heatPump(kWh)', 'cons_ch_hp'],
-        ['ConsumedEnergy', 'Cooling', 'heatPump(kWh)', 'cons_cooling_hp'],
-        ['ConsumedEnergy', 'HotWater', 'heatPump(kWh)', 'cons_hw_hp'],
-        ['ConsumedEnergy', 'Total', 'auxiliaryHeater(kWh)', 'cons_total_aux'],
-        ['ConsumedEnergy', 'CentralHeating', 'auxiliaryHeater(kWh)', 'cons_ch_aux'],
-        ['ConsumedEnergy', 'HotWater', 'auxiliaryHeater(kWh)', 'cons_hw_aux'],
-        ['Sensors', '', 'outdoorTemperature(C)', 'outdoor_temp'],
-        ['Sensors', '', 'flowTemperature(C)', 'flow_temp'],
-        ['Sensors', '', 'roomTemperature(C)', 'room_temp'],
-        ['Sensors', '', 'hotWaterTemperature(C)', 'hw_temp'],
+    private const RESOLUTION_ALIASES = [
+        'hour' => 'hour',
+        'timme' => 'hour',
+        'day' => 'day',
+        'dag' => 'day',
+        'month' => 'month',
+        'manad' => 'month',
+        'månad' => 'month',
+    ];
+
+    private const COLUMN_MAP = [
+        2 => ['metric_name' => 'prod_total_hp', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'Total'],
+        3 => ['metric_name' => 'prod_ch_hp', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'CentralHeating'],
+        4 => ['metric_name' => 'prod_cooling_hp', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'Cooling'],
+        5 => ['metric_name' => 'prod_hw_hp', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'HotWater'],
+        6 => ['metric_name' => 'prod_total_env', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'Total'],
+        7 => ['metric_name' => 'prod_ch_env', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'CentralHeating'],
+        8 => ['metric_name' => 'prod_cooling_env', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'Cooling'],
+        9 => ['metric_name' => 'prod_hw_env', 'metric_group' => 'ProducedEnergy', 'subcategory' => 'HotWater'],
+        10 => ['metric_name' => 'cons_total_hp', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'Total'],
+        11 => ['metric_name' => 'cons_ch_hp', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'CentralHeating'],
+        12 => ['metric_name' => 'cons_cooling_hp', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'Cooling'],
+        13 => ['metric_name' => 'cons_hw_hp', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'HotWater'],
+        14 => ['metric_name' => 'cons_total_aux', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'Total'],
+        15 => ['metric_name' => 'cons_ch_aux', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'CentralHeating'],
+        16 => ['metric_name' => 'cons_hw_aux', 'metric_group' => 'ConsumedEnergy', 'subcategory' => 'HotWater'],
+        17 => ['metric_name' => 'outdoor_temp', 'metric_group' => 'Sensors', 'subcategory' => ''],
+        18 => ['metric_name' => 'flow_temp', 'metric_group' => 'Sensors', 'subcategory' => ''],
+        19 => ['metric_name' => 'room_temp', 'metric_group' => 'Sensors', 'subcategory' => ''],
+        20 => ['metric_name' => 'hw_temp', 'metric_group' => 'Sensors', 'subcategory' => ''],
     ];
 
     public function parse(string $csvContent, string $source, string $importBatchId): array
@@ -39,8 +49,9 @@ final class CsvParser
         fwrite($handle, $csvContent);
         rewind($handle);
 
+        $delimiter = $this->detectDelimiter($csvContent);
         $csvRows = [];
-        while (($row = fgetcsv($handle)) !== false) {
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
             $csvRows[] = $row;
         }
         fclose($handle);
@@ -49,44 +60,15 @@ final class CsvParser
             throw new RuntimeException('CSV file too short - expected at least 4 rows');
         }
 
-        $header0 = $csvRows[0];
-        $header1 = $csvRows[1];
         $header2 = $csvRows[2];
 
-        $columnMap = [];
-        $currentGroup = '';
-        $currentSubcategory = '';
-
-        for ($i = 2, $max = count($header2); $i < $max; $i++) {
-            if (!empty($header0[$i])) {
-                $currentGroup = trim((string)$header0[$i]);
-                if ($currentGroup === 'Sensors') {
-                    $currentSubcategory = '';
-                }
-            }
-            if (!empty($header1[$i])) {
-                $currentSubcategory = trim((string)$header1[$i]);
-            }
-
-            $measurement = trim((string)($header2[$i] ?? ''));
-            if ($currentGroup === 'Sensors') {
-                $currentSubcategory = '';
-            }
-            foreach (self::CSV_COLUMN_MAP as [$group, $subcategory, $measurementPattern, $metricName]) {
-                if ($group === $currentGroup && $subcategory === $currentSubcategory && $measurementPattern === $measurement) {
-                    $columnMap[$i] = [
-                        'metric_name' => $metricName,
-                        'metric_group' => $currentGroup,
-                        'subcategory' => $currentSubcategory,
-                    ];
-                    break;
-                }
-            }
+        if (count($header2) < (max(array_keys(self::COLUMN_MAP)) + 1)) {
+            throw new RuntimeException('CSV file format not recognized');
         }
 
         for ($i = 3, $count = count($csvRows); $i < $count; $i++) {
             $row = $csvRows[$i];
-            $resolution = strtolower(trim((string)($row[0] ?? '')));
+            $resolution = $this->normalizeResolution((string)($row[0] ?? ''));
             $timestamp = $this->normalizeTimestamp((string)($row[1] ?? ''));
 
             if (!in_array($resolution, ['hour', 'day', 'month'], true) || $timestamp === null) {
@@ -94,7 +76,7 @@ final class CsvParser
             }
 
             $hadValue = false;
-            foreach ($columnMap as $index => $meta) {
+            foreach (self::COLUMN_MAP as $index => $meta) {
                 $value = $this->parseValue((string)($row[$index] ?? ''));
                 if ($value === null) {
                     continue;
@@ -119,6 +101,52 @@ final class CsvParser
         }
 
         return $rows;
+    }
+
+    private function normalizeResolution(string $value): string
+    {
+        $trimmed = trim($this->stripBom($value));
+        $lookupKey = $this->normalizeLookupKey($trimmed);
+        return self::RESOLUTION_ALIASES[$lookupKey] ?? $lookupKey;
+    }
+
+    private function detectDelimiter(string $csvContent): string
+    {
+        $sample = implode("\n", array_slice(preg_split('/\R/u', $csvContent) ?: [], 0, 3));
+        $counts = [
+            ';' => substr_count($sample, ';'),
+            ',' => substr_count($sample, ','),
+            "\t" => substr_count($sample, "\t"),
+        ];
+
+        $delimiter = ',';
+        $maxCount = -1;
+        foreach ($counts as $candidate => $count) {
+            if ($count > $maxCount) {
+                $delimiter = $candidate;
+                $maxCount = $count;
+            }
+        }
+
+        return $delimiter;
+    }
+
+    private function stripBom(string $value): string
+    {
+        return str_starts_with($value, "\xEF\xBB\xBF") ? substr($value, 3) : $value;
+    }
+
+    private function normalizeLookupKey(string $value): string
+    {
+        $normalized = mb_strtolower($value, 'UTF-8');
+        $normalized = strtr($normalized, [
+            'å' => 'a',
+            'ä' => 'a',
+            'ö' => 'o',
+        ]);
+
+        $key = preg_replace('/[^a-z0-9]+/', '', $normalized);
+        return $key ?? '';
     }
 
     private function parseValue(string $value): ?float
