@@ -524,6 +524,39 @@ function renderConsumptionChart(series) {
 
   const dayTickMs = 24 * 60 * 60 * 1000;
   const tick0 = x.length > 0 ? x[0] : undefined;
+  const rangeMs = startDate && endDate ? Math.max(0, endDate.getTime() - startDate.getTime()) : 0;
+  const rangeDays = rangeMs / dayTickMs;
+
+  const xAxisConfig = {
+    title: 'Time',
+    type: 'date',
+    automargin: true,
+    tickfont: { size: 11 },
+    showgrid: false,
+    zeroline: false,
+  };
+
+  if (resolution === 'hour') {
+    xAxisConfig.tickformat = '%Y-%m-%d %H:%M';
+    xAxisConfig.nticks = Math.max(4, Math.floor(width / 140));
+  } else if (rangeDays > 120) {
+    xAxisConfig.tickformat = '%Y-%m';
+    xAxisConfig.dtick = 'M1';
+    xAxisConfig.ticklabelmode = 'period';
+  } else if (rangeDays > 45) {
+    xAxisConfig.tickformat = '%Y-%m-%d';
+    xAxisConfig.dtick = 7 * dayTickMs;
+    xAxisConfig.tickangle = -30;
+    if (tick0) {
+      xAxisConfig.tick0 = tick0;
+    }
+  } else {
+    xAxisConfig.tickformat = '%Y-%m-%d';
+    if (tick0) {
+      xAxisConfig.tick0 = tick0;
+      xAxisConfig.dtick = dayTickMs;
+    }
+  }
 
   const layout = {
     width,
@@ -532,16 +565,7 @@ function renderConsumptionChart(series) {
     hovermode: 'x unified',
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)',
-    xaxis: {
-      title: 'Time',
-      type: 'date',
-      automargin: true,
-      tickfont: { size: 11 },
-      showgrid: false,
-      zeroline: false,
-      tickformat: '%Y-%m-%d',
-      ...(tick0 ? { tick0, dtick: dayTickMs } : {}),
-    },
+    xaxis: xAxisConfig,
     yaxis: {
       title: 'Energy (kWh)',
       gridcolor: 'rgba(35, 40, 33, 0.08)',
