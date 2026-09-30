@@ -183,7 +183,7 @@ header('Content-Type: text/html; charset=utf-8');
     <section class="panel settings-panel">
       <div class="settings-panel-head">
         <h2>Legionella schedule</h2>
-        <p>This rarely changes and is stored in the database.</p>
+        <p>Record when the schedule took effect to keep the graph’s history accurate.</p>
       </div>
       <form id="legionella-form" class="filters settings-form" novalidate>
         <label>
@@ -201,6 +201,10 @@ header('Content-Type: text/html; charset=utf-8');
               <option value="<?= $hour ?>" <?= $hour === $legionellaHour ? 'selected' : '' ?>><?= str_pad((string)$hour, 2, '0', STR_PAD_LEFT) ?>:00</option>
             <?php endfor; ?>
           </select>
+        </label>
+        <label>
+          Effective from
+          <input id="legionella-effective-date" name="effective_date" type="date" value="<?= htmlspecialchars(date('Y-m-d')) ?>" required>
         </label>
         <button class="btn" type="submit">Save schedule</button>
       </form>

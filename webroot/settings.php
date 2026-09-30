@@ -37,7 +37,8 @@ try {
 
         $result = $settings->saveLegionellaSchedule(
             (int)($payload['legionella_day'] ?? 1),
-            (int)($payload['legionella_hour'] ?? 2)
+            (int)($payload['legionella_hour'] ?? 2),
+            trim((string)($payload['effective_date'] ?? date('Y-m-d')))
         );
     } else {
         http_response_code(405);

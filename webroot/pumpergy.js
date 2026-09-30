@@ -1,5 +1,6 @@
 let annotationsCache = [];
 let currentLegionellaSchedule = { day: 1, hour: 2 };
+let currentLegionellaScheduleHistory = [];
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function byId(id) {
@@ -112,6 +113,7 @@ function legionellaStateFromForm() {
   return {
     legionella_day: byId('legionella-day').value,
     legionella_hour: byId('legionella-hour').value,
+    effective_date: byId('legionella-effective-date').value,
   };
 }
 
@@ -216,6 +218,14 @@ async function loadAnnotations(state) {
   return res.json();
 }
 
+async function loadLegionellaSettings() {
+  const res = await fetch('settings.php');
+  if (!res.ok) {
+    throw new Error(`Settings request failed (${res.status})`);
+  }
+  return res.json();
+}
+
 async function saveLegionellaSettings(state) {
   const res = await fetch('settings.php', {
     method: 'POST',
@@ -223,6 +233,7 @@ async function saveLegionellaSettings(state) {
     body: JSON.stringify({
       legionella_day: Number(state.legionella_day),
       legionella_hour: Number(state.legionella_hour),
+      effective_date: state.effective_date,
     }),
   });
   if (!res.ok) {
@@ -304,8 +315,6 @@ function renderConsumptionChart(series) {
 
   const width = Math.max(host.clientWidth || 0, 360);
   const state = stateFromForm();
-  const legionellaDay = Number(currentLegionellaSchedule.day);
-  const legionellaHour = Number(currentLegionellaSchedule.hour);
   const resolution = state.resolution;
   const annotationRangeStart = state.start ? new Date(`${state.start}T00:00:00`) : null;
   const annotationRangeEnd = state.end ? new Date(`${state.end}T23:59:59`) : null;
@@ -318,6 +327,7 @@ function renderConsumptionChart(series) {
 
   const legionellaTimes = [];
   const seenLegionellaKeys = new Set();
+  const scheduleLabels = new Set();
 
   const toDate = (value) => {
     if (!value) {
@@ -329,6 +339,36 @@ function renderConsumptionChart(series) {
 
   const startDate = toDate(state.start) || toDate(series[0]?.ts);
   const endDate = toDate(state.end) || toDate(series[series.length - 1]?.ts);
+  const scheduleHistory = (Array.isArray(currentLegionellaScheduleHistory) ? currentLegionellaScheduleHistory : [])
+    .filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(String(entry?.effective_date || '')))
+    .map((entry) => ({
+      effective_date: String(entry.effective_date),
+      day: Number(entry.day),
+      hour: Number(entry.hour),
+    }))
+    .filter((entry) => entry.day >= 0 && entry.day <= 6 && entry.hour >= 0 && entry.hour <= 23)
+    .sort((a, b) => a.effective_date.localeCompare(b.effective_date));
+  if (scheduleHistory.length === 0) {
+    scheduleHistory.push({
+      effective_date: '0001-01-01',
+      day: Number(currentLegionellaSchedule.day),
+      hour: Number(currentLegionellaSchedule.hour),
+    });
+  }
+
+  const scheduleChanges = scheduleHistory.slice(1).flatMap((entry, index) => {
+    const previous = scheduleHistory[index];
+    if (previous.day === entry.day && previous.hour === entry.hour) {
+      return [];
+    }
+    return [{ ...entry, previous_day: previous.day, previous_hour: previous.hour }];
+  });
+  const visibleScheduleChanges = scheduleChanges.filter((change) => (
+    change.effective_date >= String(state.start || '').slice(0, 10)
+    && change.effective_date <= String(state.end || '').slice(0, 10)
+  ));
+
+  let activeScheduleIndex = 0;
 
   if (startDate && endDate) {
     const cursor = new Date(startDate);
@@ -337,13 +377,22 @@ function renderConsumptionChart(series) {
     last.setHours(0, 0, 0, 0);
 
     while (cursor <= last) {
+      const dateKey = formatLocalDateTime(cursor).slice(0, 10);
+      while (
+        activeScheduleIndex + 1 < scheduleHistory.length
+        && scheduleHistory[activeScheduleIndex + 1].effective_date <= dateKey
+      ) {
+        activeScheduleIndex += 1;
+      }
+      const schedule = scheduleHistory[activeScheduleIndex];
       const weekdayMonZero = (cursor.getDay() + 6) % 7;
-      if (weekdayMonZero === legionellaDay) {
-        const canonicalKey = toDisplayBucketTs(cursor, resolution, legionellaHour);
+      if (weekdayMonZero === schedule.day) {
+        const canonicalKey = toDisplayBucketTs(cursor, resolution, schedule.hour);
         if (!seenLegionellaKeys.has(canonicalKey)) {
           seenLegionellaKeys.add(canonicalKey);
           legionellaTimes.push(canonicalKey);
         }
+        scheduleLabels.add(`${WEEKDAYS[schedule.day].slice(0, 3)} ${String(schedule.hour).padStart(2, '0')}:00`);
       }
       cursor.setDate(cursor.getDate() + 1);
     }
@@ -418,6 +467,32 @@ function renderConsumptionChart(series) {
       showarrow: false,
       font: { size: 14 },
       yshift: 10,
+    });
+  }
+
+  for (const change of visibleScheduleChanges) {
+    const effectiveDate = new Date(`${change.effective_date}T12:00:00`);
+    const changeBucketTs = toDisplayBucketTs(effectiveDate, resolution);
+    const previousLabel = `${WEEKDAYS[change.previous_day].slice(0, 3)} ${String(change.previous_hour).padStart(2, '0')}:00`;
+    const nextLabel = `${WEEKDAYS[change.day].slice(0, 3)} ${String(change.hour).padStart(2, '0')}:00`;
+    shapes.push({
+      type: 'line',
+      x0: changeBucketTs,
+      x1: changeBucketTs,
+      y0: 0,
+      y1: 1,
+      yref: 'paper',
+      line: { color: '#5C7CDC', width: 2 },
+    });
+    annotations.push({
+      x: changeBucketTs,
+      y: 1,
+      yref: 'paper',
+      text: '🗓️',
+      showarrow: false,
+      font: { size: 14, color: '#2f3f75' },
+      yshift: 10,
+      hovertext: `Legionella schedule changed: ${previousLabel} → ${nextLabel} (effective ${change.effective_date})`,
     });
   }
 
@@ -508,17 +583,27 @@ function renderConsumptionChart(series) {
     });
   }
 
-  const weekday = WEEKDAYS[legionellaDay] || WEEKDAYS[1];
-  const hourStr = String(legionellaHour).padStart(2, '0');
   if (legionellaTimes.length > 0) {
+    const scheduleLabel = [...scheduleLabels].join(' / ');
     traces.push({
       type: 'scatter',
       x: [null],
       y: [null],
       mode: 'lines',
-      name: `Legionella (${weekday.slice(0, 3)} ${hourStr}:00)`,
+      name: `Legionella (${scheduleLabel})`,
       line: { color: '#9B59B6', dash: 'dash', width: 2 },
-      showlegend: false,
+      showlegend: true,
+    });
+  }
+  if (visibleScheduleChanges.length > 0) {
+    traces.push({
+      type: 'scatter',
+      x: [null],
+      y: [null],
+      mode: 'markers',
+      name: 'Schedule changed',
+      marker: { color: '#5C7CDC', symbol: 'diamond', size: 9 },
+      showlegend: true,
     });
   }
 
@@ -740,10 +825,18 @@ async function refreshDashboard() {
 
   setStatus('Loading readings and annotations...');
 
-  const [readings, annotationData] = await Promise.all([
+  const [readings, annotationData, scheduleData] = await Promise.all([
     loadReadings(state),
     loadAnnotations(state),
+    loadLegionellaSettings(),
   ]);
+
+  currentLegionellaSchedule = {
+    day: Number(scheduleData.day),
+    hour: Number(scheduleData.hour),
+  };
+  currentLegionellaScheduleHistory = Array.isArray(scheduleData.history) ? scheduleData.history : [];
+  syncLegionellaControls();
 
   const normalizedSeries = normalizeSeries(Array.isArray(readings.series) ? readings.series : []);
   const series = collapseSeriesForDisplay(normalizedSeries, state.resolution);
@@ -788,6 +881,7 @@ function wireEvents() {
         day: Number(saved.day),
         hour: Number(saved.hour),
       };
+      currentLegionellaScheduleHistory = Array.isArray(saved.history) ? saved.history : [];
       syncLegionellaControls();
       await refreshDashboard();
     } catch (err) {

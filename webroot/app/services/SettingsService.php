@@ -21,20 +21,42 @@ final class SettingsService
         return [
             'day' => $day,
             'hour' => $hour,
+            'history' => $this->settings->getLegionellaScheduleHistory(
+                self::DEFAULT_LEGIONELLA_DAY,
+                self::DEFAULT_LEGIONELLA_HOUR
+            ),
         ];
     }
 
-    public function saveLegionellaSchedule(int $day, int $hour): array
+    public function saveLegionellaSchedule(int $day, int $hour, string $effectiveDate): array
     {
         $normalizedDay = $this->normalizeDay((string)$day);
         $normalizedHour = $this->normalizeHour((string)$hour);
 
-        $this->settings->set('legionella_day', (string)$normalizedDay);
-        $this->settings->set('legionella_hour', (string)$normalizedHour);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $effectiveDate)) {
+            throw new InvalidArgumentException('Effective date must use YYYY-MM-DD format.');
+        }
+        [$year, $month, $dayOfMonth] = array_map('intval', explode('-', $effectiveDate));
+        if (!checkdate($month, $dayOfMonth, $year)) {
+            throw new InvalidArgumentException('Effective date is not a valid calendar date.');
+        }
+        if ($effectiveDate > date('Y-m-d')) {
+            throw new InvalidArgumentException('Effective date cannot be in the future.');
+        }
+
+        $this->settings->getLegionellaScheduleHistory(
+            self::DEFAULT_LEGIONELLA_DAY,
+            self::DEFAULT_LEGIONELLA_HOUR
+        );
+        $this->settings->saveLegionellaSchedule($normalizedDay, $normalizedHour, $effectiveDate);
 
         return [
             'day' => $normalizedDay,
             'hour' => $normalizedHour,
+            'history' => $this->settings->getLegionellaScheduleHistory(
+                self::DEFAULT_LEGIONELLA_DAY,
+                self::DEFAULT_LEGIONELLA_HOUR
+            ),
         ];
     }
 
