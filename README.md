@@ -22,19 +22,19 @@ Export data from IVT Anywhere II
 `Energy Monitoring -> ⓘ down to the right -> Download data`  
 and share to a Google Drive folder. 
 
-The app only provides last 3 days worth of hourly resolution, so to acheive that
-one needs to do this at least every 3rd day. Pumpergy will gracefully handle files having different resolutions (i.e. Downloading last 3 months for getting daily resolution works) to cover for when/if one misses the *every 3rd day ceremony*.
+The app only provides last 3 days worth of hourly resolution, so to achieve that one needs to do this at least every 3rd day.  
+Pumpergy will gracefully handle files having different resolutions (i.e. Downloading last 3 months for getting daily resolution works) to cover for when/if one misses the *every 3rd day ceremony*.
 
 💡 I'd love to know if there are easier ways to retrieve data from the [K 40 RF](https://docs.bosch-homecomfort.com/download/pdf/file/6721874402.pdf) unit,  see [discussion](https://github.com/perfnurt/pumpergy/discussions/1).
 
-Pumpergy imports the csv files to its DB (with some threshold as to not do it too often). 
+Pumpergy imports the csv files to its DB. 
 
 
 ## Project Structure
 ```
 pumpergy/
 ├── deploy.sh
-├── .deploy-config-<target>.sh # Not versioned. Settings for deplopyng the app to <target>, see/run deplpy.sh for details/creation.
+├── .deploy-config-<target>.sh # Not versioned. Settings for deploying the app to <target>, see/run deploy.sh for details/creation.
 ├── creds.php.example       # Template file to copy to webroot(apps/creds.php)
 ├── db/
 │   └── dbschema.sql        # The DB schema
@@ -51,7 +51,7 @@ pumpergy/
 ## Google Drive Integration
 Prerequisites:
 - Google Cloud [service account](https://docs.cloud.google.com/iam/docs/service-account-overview) with [Drive API](https://developers.google.com/workspace/drive/api/guides/about-sdk) enabled.
-- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) pecified in `app/creds.php`.
+- Service account [JSON credentials](https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account) specified in `app/creds.php`.
 - Two folders in Google Drive that the service account has write access to.  
   The actual names are not important but something like:
   - `Pumpdata` for the CSV exports from IVT Anywhere II 
